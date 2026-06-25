@@ -1,5 +1,4 @@
-#密码/JWT 工具
-
+#密码/JWT 工具,保护用户的密码 和 发放/查验系统的通行证（JWT Token）
 import os
 import bcrypt
 from datetime import datetime, timedelta, timezone
@@ -24,14 +23,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     )
 
 
-def create_access_token(user_id: int, username: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    payload = {
+def create_access_token(user_id: int, username: str, expires_delta: timedelta = None):
+    to_encode = {
         "user_id": user_id,
         "username": username,
-        "exp": expire
+        "exp": datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict:

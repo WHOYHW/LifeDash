@@ -58,7 +58,14 @@ const handleLogin = async () => {
     await authStore.login(form.value)
     router.push('/dashboard')
   } catch (err) {
-    errorMsg.value = err.message || '登录失败，请检查账号和密码'
+    const msg = err.message || ''
+    if (msg.includes('网络错误')) {
+      errorMsg.value = '无法连接到服务器，请确认后端已启动'
+    } else if (msg.includes('超时')) {
+      errorMsg.value = '请求超时，请稍后重试'
+    } else {
+      errorMsg.value = msg || '登录失败，请检查账号和密码'
+    }
   } finally {
     loading.value = false
   }

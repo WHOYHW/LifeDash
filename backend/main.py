@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from database import engine, Base
 from routers import auth as auth_router
+from routers import todos as todos_router
+from routers import weather as weather_router
+import models
+
+load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
@@ -16,6 +22,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
+app.include_router(todos_router.router)
+app.include_router(weather_router.router)
 
 
 @app.get("/")

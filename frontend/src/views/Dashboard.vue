@@ -26,14 +26,14 @@
         <nav class="side-nav">
           <div class="nav-section">主菜单</div>
           <ul>
-            <li class="active" @click="activeMenu = 'dashboard'">
+            <li :class="{active: activeMenu === 'dashboard'}" @click="activeMenu = 'dashboard'">
               <span class="nav-icon">🏠</span>
               <span class="nav-label">仪表盘</span>
             </li>
-            <li @click="activeMenu = 'todos'">
+            <li :class="{active: activeMenu === 'todos'}" @click="activeMenu = 'todos'; goToTodos()">
               <span class="nav-icon">📋</span>
               <span class="nav-label">待办事项</span>
-              <span class="nav-badge">3</span>
+              <span v-if="activeCount > 0" class="nav-badge">{{ activeCount }}</span>
             </li>
             <li @click="activeMenu = 'habits'">
               <span class="nav-icon">✅</span>
@@ -74,14 +74,19 @@
           </div>
         </div>
 
+        <div v-if="loadError" class="load-error-banner">
+          <span>⚠️ {{ loadError }}</span>
+          <button class="btn-retry" @click="reloadTodos">重试</button>
+        </div>
+
         <div class="stats-row">
           <div class="stat-card">
             <div class="stat-icon-wrap stat-icon-1">📋</div>
             <div class="stat-info">
-              <span class="stat-value">12</span>
-              <span class="stat-label">待办事项</span>
+              <span class="stat-value">{{ activeCount }}</span>
+              <span class="stat-label">进行中待办</span>
             </div>
-            <div class="stat-trend up">↑ 3</div>
+            <div class="stat-trend up">今日</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon-wrap stat-icon-2">✅</div>
@@ -122,31 +127,8 @@
             </div>
           </div>
 
-          <div class="panel">
-            <div class="panel-header">
-              <h3>🌤️ 天气信息</h3>
-              <span class="panel-action">切换</span>
-            </div>
-            <div class="weather-display">
-              <div class="weather-main">
-                <span class="weather-icon">☀️</span>
-                <span class="weather-temp">26°C</span>
-              </div>
-              <div class="weather-detail">
-                <span class="weather-city">北京</span>
-                <span class="weather-desc">晴朗</span>
-              </div>
-              <div class="weather-extra">
-                <div class="weather-item">
-                  <span class="wi-label">湿度</span>
-                  <span class="wi-value">45%</span>
-                </div>
-                <div class="weather-item">
-                  <span class="wi-label">风速</span>
-                  <span class="wi-value">3m/s</span>
-                </div>
-              </div>
-            </div>
+          <div class="panel weather-panel">
+            <WeatherCard />
           </div>
         </div>
 
@@ -154,40 +136,32 @@
           <div class="panel">
             <div class="panel-header">
               <h3>📋 今日待办</h3>
-              <span class="panel-action">查看全部</span>
+              <span class="panel-action" @click="goToTodos">查看全部 →</span>
             </div>
-            <div class="todo-list">
-              <div class="todo-item">
-                <div class="todo-checkbox checked"><span>✓</span></div>
-                <div class="todo-content">
-                  <span class="todo-title done">完成项目周报</span>
-                  <span class="todo-meta">
-                    <span class="priority-tag priority-high">高</span>
-                    <span class="todo-time">今天 18:00</span>
-                  </span>
+            <div class="todo-list" v-if="todayTodos.length > 0">
+              <div
+                v-for="todo in todayTodos"
+                :key="todo.id"
+                class="todo-item"
+                :class="{ completed: todo.is_completed }"
+              >
+                <div
+                  class="todo-checkbox"
+                  :class="{ checked: todo.is_completed }"
+                  @click="toggleTodo(todo.id)"
+                >
+                  <span v-if="todo.is_completed">✓</span>
                 </div>
-              </div>
-              <div class="todo-item">
-                <div class="todo-checkbox"></div>
                 <div class="todo-content">
-                  <span class="todo-title">阅读技术书籍 30 页</span>
+                  <span class="todo-title" :class="{ done: todo.is_completed }">{{ todo.title }}</span>
                   <span class="todo-meta">
-                    <span class="priority-tag priority-medium">中</span>
-                    <span class="todo-time">今天 20:00</span>
-                  </span>
-                </div>
-              </div>
-              <div class="todo-item">
-                <div class="todo-checkbox"></div>
-                <div class="todo-content">
-                  <span class="todo-title">锻炼身体 30 分钟</span>
-                  <span class="todo-meta">
-                    <span class="priority-tag priority-low">低</span>
-                    <span class="todo-time">今天 21:00</span>
+                    <span :class="['priority-tag', `priority-${todo.priority}`]">{{ formatPriority(todo.priority) }}</span>
+                    <span v-if="todo.due_date" class="todo-time">{{ formatDate(todo.due_date) }}</span>
                   </span>
                 </div>
               </div>
             </div>
+            <div v-else class="empty-tip">暂无待办，添加第一条吧 →</div>
           </div>
 
           <div class="panel">
@@ -235,14 +209,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useTodosStore } from '@/stores/todos'
+import WeatherCard from '@/components/WeatherCard.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const todosStore = useTodosStore()
 
 const activeMenu = ref('dashboard')
 const currentTime = ref('')
 const currentDate = ref('')
 const greeting = ref('')
+const loadError = ref('')
 
 let timer = null
 
@@ -250,6 +228,9 @@ const avatarLetter = computed(() => {
   const name = authStore.user?.username || 'U'
   return name.charAt(0).toUpperCase()
 })
+
+const todayTodos = computed(() => todosStore.todayTodos)
+const activeCount = computed(() => todosStore.activeTodos.length)
 
 const updateTime = () => {
   const now = new Date()
@@ -260,7 +241,7 @@ const updateTime = () => {
   const hour = now.getHours()
   if (hour >= 6 && hour < 12) greeting.value = '🌅 早上好，新的一天开始了'
   else if (hour >= 12 && hour < 14) greeting.value = '☀️ 中午好，记得午休'
-  else if (hour >= 14 && hour < 18) greeting.value = '�️ 下午好，加油完成任务'
+  else if (hour >= 14 && hour < 18) greeting.value = '📚 下午好，加油完成任务'
   else if (hour >= 18 && hour < 22) greeting.value = '🌇 晚上好，放松一下吧'
   else greeting.value = '🌙 夜深了，早点休息'
 }
@@ -270,10 +251,72 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-onMounted(() => {
+const goToTodos = () => {
+  router.push('/todos')
+}
+
+const toggleTodo = async (id) => {
+  try {
+    await todosStore.toggleTodo(id)
+  } catch (e) {
+    alert('操作失败: ' + (e.message || '未知错误'))
+  }
+}
+
+const reloadTodos = async () => {
+  try {
+    await todosStore.fetchTodos()
+    await todosStore.fetchTodayTodos()
+    loadError.value = ''
+  } catch (e) {
+    loadError.value = e.message || '加载失败'
+  }
+}
+
+const formatPriority = (p) => ({ high: '高', medium: '中', low: '低' })[p] || '中'
+const formatDate = (d) => {
+  if (!d) return ''
+  const s = String(d)
+  const m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{1,2}):(\d{1,2})/)
+  if (m) {
+    const year = m[1], month = m[2], day = m[3], hour = m[4], minute = m[5]
+    const hh = hour.padStart(2, '0')
+    const mm = minute.padStart(2, '0')
+    const today = new Date()
+    const isToday = String(today.getFullYear()) === year
+      && String(today.getMonth()+1).padStart(2,'0') === month
+      && String(today.getDate()).padStart(2,'0') === day
+    if (isToday) return `今天 ${hh}:${mm}`
+    return `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')} ${hh}:${mm}`
+  }
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return s
+  const now = new Date()
+  const isToday = dt.toDateString() === now.toDateString()
+  if (isToday) {
+    const hh = String(dt.getHours()).padStart(2, '0')
+    const mm = String(dt.getMinutes()).padStart(2, '0')
+    return `今天 ${hh}:${mm}`
+  }
+  const y = dt.getFullYear()
+  const m2 = String(dt.getMonth() + 1).padStart(2, '0')
+  const day2 = String(dt.getDate()).padStart(2, '0')
+  const hh = String(dt.getHours()).padStart(2, '0')
+  const mm = String(dt.getMinutes()).padStart(2, '0')
+  return `${y}-${m2}-${day2} ${hh}:${mm}`
+}
+
+onMounted(async () => {
   authStore.loadUserFromStorage()
   updateTime()
   timer = setInterval(updateTime, 1000)
+  try {
+    await todosStore.fetchTodos()
+    await todosStore.fetchTodayTodos()
+    loadError.value = ''
+  } catch (e) {
+    loadError.value = e.message || '加载待办失败，请检查后端服务'
+  }
 })
 
 onUnmounted(() => {
@@ -389,6 +432,21 @@ body {
 .page-title h2 { font-size: 24px; color: #2d3748; font-weight: 700; margin-bottom: 4px; }
 .page-subtitle { color: #718096; font-size: 14px; }
 .page-actions { display: flex; gap: 12px; }
+
+.load-error-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  background: #fff5f5; border: 1px solid #feb2b2;
+  color: #c53030; padding: 12px 16px;
+  border-radius: 10px; font-size: 14px; font-weight: 500;
+  margin-bottom: 20px;
+}
+.btn-retry {
+  background: #c53030; color: white; border: none;
+  padding: 6px 14px; border-radius: 6px;
+  font-weight: 600; cursor: pointer; font-size: 12px;
+}
+.btn-retry:hover { background: #9b2c2c; }
 .btn-ghost {
   width: 40px; height: 40px; border: none;
   background: white; border-radius: 10px;
@@ -487,6 +545,11 @@ body {
 .priority-low { background: #c6f6d5; color: #38a169; }
 .todo-time { font-size: 12px; color: #a0aec0; }
 
+.empty-tip {
+  text-align: center; padding: 30px 0;
+  font-size: 14px; color: #a0aec0;
+}
+
 .habit-ring { position: relative; display: flex; align-items: center; justify-content: center; margin: 16px 0; }
 .ring-progress { width: 140px; height: 140px; transform: rotate(-90deg); }
 .ring-bg { fill: none; stroke: #edf2f7; stroke-width: 10; }
@@ -501,6 +564,17 @@ body {
 .habit-dot.habit-done { background: #38a169; }
 .habit-name { flex: 1; font-size: 14px; color: #2d3748; font-weight: 500; }
 .habit-status { font-size: 12px; color: #a0aec0; }
+
+.weather-panel {
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.weather-panel > :deep(.weather-card) {
+  border-radius: 16px;
+}
 
 @media (max-width: 1024px) {
   .stats-row { grid-template-columns: repeat(2, 1fr); }

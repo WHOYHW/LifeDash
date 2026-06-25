@@ -74,7 +74,14 @@ const handleRegister = async () => {
       router.push('/login')
     }, 1500)
   } catch (err) {
-    errorMsg.value = err.message || '注册失败，请检查输入信息'
+    const msg = err.message || ''
+    if (msg.includes('422') || msg.includes('IntegrityError')) {
+      errorMsg.value = '用户名或邮箱已被注册'
+    } else if (msg.includes('网络错误')) {
+      errorMsg.value = '无法连接到服务器，请确认后端已启动'
+    } else {
+      errorMsg.value = msg || '注册失败，请检查输入信息'
+    }
   } finally {
     loading.value = false
   }
