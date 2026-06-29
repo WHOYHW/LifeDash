@@ -2,12 +2,14 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Dashboard from '../views/Dashboard.vue'
+import Todos from '../views/Todos.vue'
 
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: Login, meta: { requiresAuth: false } },
   { path: '/register', component: Register, meta: { requiresAuth: false } },
   { path: '/dashboard', component: Dashboard, meta: { requiresAuth: true } },
+  { path: '/todos', component: Todos, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({
